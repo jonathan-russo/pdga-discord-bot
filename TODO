@@ -1,0 +1,5 @@
+TODO
+-----
+Implement usage string in discord error messages
+Implement PDGA Lib to query player info
+    Use HTML parsising lib

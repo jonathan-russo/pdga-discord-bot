@@ -2,6 +2,10 @@
 
 This repo contains code for a Discord Bot written in Go.
 
+## Configuration
+
+This app requires the environment variable `DISCORD_TOKEN` to be set.  
+
 ## Permissions
 
 The bot requires the following permissions to run:

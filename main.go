@@ -1,78 +1,115 @@
 package main
 
 import (
- //   "encoding/json"
-    "flag"
-    "fmt"
- //   "io/ioutil"
- //   "net/http"
-    "os"
-    "os/signal"
- //   "strings"
-    "syscall"
+	//   "encoding/json"
 
-    "github.com/bwmarrin/discordgo"
+	"fmt"
+	"log"
+	"strings"
+
+	"errors"
+
+	"strconv"
+
+	//   "io/ioutil"
+	//   "net/http"
+	"os"
+	"os/signal"
+
+	"syscall"
+
+	"github.com/bwmarrin/discordgo"
 )
 
-// Variables used for command line parameters
 var (
-    Token string
+	Token          string // Discord token for authentication
+	TriggerCommand string // Command string used to trigger the bot
 )
 
 func init() {
-    flag.StringVar(&Token, "t", "", "Bot Token")
-    flag.Parse()
+	TriggerCommand = "/pdga"
+	Token = os.Getenv("DISCORD_TOKEN")
 }
 
 func main() {
 
-    // Create a new Discord session using the provided bot token.
-    dg, err := discordgo.New("Bot " + Token)
-    if err != nil {
-        fmt.Println("error creating Discord session,", err)
-        return
-    }
+	// Validate Token is present
+	if len(Token) == 0 {
+		log.Fatal("Discord token not present.  Set env variable 'DISCORD_TOKEN'")
+	}
 
-    // Register the messageCreate func as a callback for MessageCreate events.
-    dg.AddHandler(messageCreate)
+	// Create a new Discord session using the provided bot token.
+	dg, err := discordgo.New("Bot " + Token)
+	if err != nil {
+		log.Fatalf("Error creating Discord session, %s", err.Error())
+	}
 
-    // In this example, we only care about receiving message events.
-    dg.Identify.Intents = discordgo.IntentsGuildMessages
+	// Register the handleMessage func as a callback for MessageCreate events.
+	dg.AddHandler(handleMessage)
 
-    // Open a websocket connection to Discord and begin listening.
-    err = dg.Open()
-    if err != nil {
-        fmt.Println("error opening connection,", err)
-        return
-    }
+	// In this example, we only care about receiving message events.
+	dg.Identify.Intents = discordgo.IntentsGuildMessages
 
-    // Wait here until CTRL-C or other term signal is received.
-    fmt.Println("Bot is now running. Press CTRL-C to exit.")
-    sc := make(chan os.Signal, 1)
-    signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
-    <-sc
+	// Open a websocket connection to Discord and begin listening.
+	err = dg.Open()
+	if err != nil {
+		log.Fatalf("error opening connection, %s", err.Error())
+	}
 
-    // Cleanly close down the Discord session.
-    dg.Close()
+	// Wait here until CTRL-C or other term signal is received.
+	log.Println("Bot is now running. Press CTRL-C to exit.")
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
+	<-sc
+
+	// Cleanly close down the Discord session.
+	dg.Close()
 }
 
 // This function will be called (due to AddHandler above) every time a new
 // message is created on any channel that the authenticated bot has access to.
-func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+func handleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
-    // Ignore all messages created by the bot itself
-    // This isn't required in this specific example but it's a good practice.
-    if m.Author.ID == s.State.User.ID {
-        return
-    }
+	// Ignore all messages created by the bot itself and all messages without the trigger command
+	if m.Author.ID == s.State.User.ID || !strings.HasPrefix(m.Content, TriggerCommand) {
+		return
+	}
 
-    fmt.Println("Received message: '" + m.Content + "'")
+	log.Println("Received command: '" + m.Content + "'")
 
-    if m.Content == "!pdga" {
+	//Parse user command
+	pdgaID, directive, err := parseUserCommand(strings.TrimPrefix(m.Content, TriggerCommand))
+	if err != nil {
+		log.Printf("Error: %s", err)
+		discordErrorReply := fmt.Errorf("Looks like you used the bot wrong! \n %w", err).Error()
+		_, err := s.ChannelMessageSend(m.ChannelID, discordErrorReply)
+		if err != nil {
+			log.Println(err)
+		}
+		return
+	}
 
-	_, err := s.ChannelMessageSend(m.ChannelID, "This works!")
-        if err != nil {
-		fmt.Println(err)
-        }
-    }
+	_, err = s.ChannelMessageSend(m.ChannelID, "Getting information for PDGA user: "+pdgaID+"executing directive: "+directive)
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+func parseUserCommand(command string) (string, string, error) {
+	inputs := strings.Fields(command)
+	if len(inputs) < 2 {
+		return "", "", errors.New("invalid number of arguments")
+	}
+
+	if i, err := strconv.Atoi(inputs[0]); err != nil || i < 0 {
+		return "", "", errors.New("PDGA number is invalid")
+	}
+
+	// Use string here because go slices don't support contains
+	allowedDirectives := "info predict_rating"
+	if !strings.Contains(allowedDirectives, inputs[1]) {
+		return "", "", errors.New("directive invalid")
+	}
+
+	return inputs[0], inputs[1], nil
 }
