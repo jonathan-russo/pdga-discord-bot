@@ -19,6 +19,8 @@ import (
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
+
+	"github.com/jonathan-russo/pdga-discord-bot/lib/pdga"
 )
 
 var (
@@ -89,9 +91,22 @@ func handleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	_, err = s.ChannelMessageSend(m.ChannelID, "Getting information for PDGA user: "+pdgaID+"executing directive: "+directive)
+	player, err := pdga.NewPlayer(pdgaID)
 	if err != nil {
-		log.Println(err)
+		discordErrorReply := fmt.Errorf("Error retrieving player profile: %w", err).Error()
+		_, err = s.ChannelMessageSend(m.ChannelID, discordErrorReply)
+		if err != nil {
+			log.Println(err)
+		}
+		return
+	}
+
+	if directive == "info" {
+		msg := player.Info()
+		_, err = s.ChannelMessageSend(m.ChannelID, msg)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
 
