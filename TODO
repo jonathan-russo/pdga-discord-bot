@@ -1,5 +1,4 @@
 TODO
 -----
-Implement usage string in discord error messages
-Implement PDGA Lib to query player info
-    Use HTML parsising lib
+Implement PDGA Lib to query ratings data
+    Cache data to attempt as few network requests as possible

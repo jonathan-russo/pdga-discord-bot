@@ -28,6 +28,16 @@ var (
 	TriggerCommand string // Command string used to trigger the bot
 )
 
+var UsageGuide = `
+Welcome to the PDGA Bot!  This bot can be used to find out information on PDGA players.
+
+Usage: /pdga <command> <pdga-id>
+
+Available Commands:
+- info            : This command displays basic information about the player
+- predict_rating  : Predict the updated rating for this player at the next ratings update. 
+`
+
 func init() {
 	TriggerCommand = "/pdga"
 	Token = os.Getenv("DISCORD_TOKEN")
@@ -80,10 +90,10 @@ func handleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	log.Println("Received command: '" + m.Content + "'")
 
 	//Parse user command
-	pdgaID, directive, err := parseUserCommand(strings.TrimPrefix(m.Content, TriggerCommand))
+	directive, pdgaID, err := parseUserCommand(strings.TrimPrefix(m.Content, TriggerCommand))
 	if err != nil {
 		log.Printf("Error: %s", err)
-		discordErrorReply := fmt.Errorf("Looks like you used the bot wrong! \n %w", err).Error()
+		discordErrorReply := fmt.Errorf("***ERROR: Failed to retrieve player profile, %w*** \n %s", err, UsageGuide).Error()
 		_, err := s.ChannelMessageSend(m.ChannelID, discordErrorReply)
 		if err != nil {
 			log.Println(err)
@@ -93,7 +103,7 @@ func handleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	player, err := pdga.NewPlayer(pdgaID)
 	if err != nil {
-		discordErrorReply := fmt.Errorf("Error retrieving player profile: %w", err).Error()
+		discordErrorReply := fmt.Errorf("***ERROR: Failed to retrieve player profile, %w*** \n %s", err, UsageGuide).Error()
 		_, err = s.ChannelMessageSend(m.ChannelID, discordErrorReply)
 		if err != nil {
 			log.Println(err)
@@ -101,9 +111,21 @@ func handleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	if directive == "info" {
+	switch directive {
+	case "info":
 		msg := player.Info()
 		_, err = s.ChannelMessageSend(m.ChannelID, msg)
+		if err != nil {
+			log.Println(err)
+		}
+	case "predict_rating":
+		_, err = s.ChannelMessageSend(m.ChannelID, "Your rating is 7")
+		if err != nil {
+			log.Println(err)
+		}
+	default:
+		invalidCommandString := fmt.Sprintf("***ERROR: Invalid directive. \n %s", UsageGuide)
+		_, err = s.ChannelMessageSend(m.ChannelID, invalidCommandString)
 		if err != nil {
 			log.Println(err)
 		}
@@ -116,14 +138,8 @@ func parseUserCommand(command string) (string, string, error) {
 		return "", "", errors.New("invalid number of arguments")
 	}
 
-	if i, err := strconv.Atoi(inputs[0]); err != nil || i < 0 {
+	if i, err := strconv.Atoi(inputs[1]); err != nil || i < 0 {
 		return "", "", errors.New("PDGA number is invalid")
-	}
-
-	// Use string here because go slices don't support contains
-	allowedDirectives := "info predict_rating"
-	if !strings.Contains(allowedDirectives, inputs[1]) {
-		return "", "", errors.New("directive invalid")
 	}
 
 	return inputs[0], inputs[1], nil
